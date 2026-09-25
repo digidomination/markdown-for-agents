@@ -1,0 +1,40 @@
+{
+    "name": "digidomination/markdown-for-agents",
+    "description": "Serve a clean Markdown version of every HTML page to AI agents: Accept: text/markdown negotiation and .md URLs, from your own PHP app. A self-hosted take on Cloudflare's Markdown for Agents, with no plan upgrade and no dependencies.",
+    "type": "library",
+    "keywords": ["markdown", "ai-agents", "llm", "llms-txt", "geo", "aeo", "content-negotiation", "html-to-markdown", "cloudflare"],
+    "homepage": "https://github.com/digidomination/markdown-for-agents",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Digital Domination",
+            "homepage": "https://digitaldomination.xyz"
+        }
+    ],
+    "require": {
+        "php": ">=8.2",
+        "ext-dom": "*",
+        "ext-libxml": "*",
+        "ext-mbstring": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Digidomination\\MarkdownForAgents\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Digidomination\\MarkdownForAgents\\Tests\\": "tests/"
+        }
+    },
+    "bin": ["bin/markdown-for-agents"],
+    "config": {
+        "sort-packages": true
+    },
+    "scripts": {
+        "test": "phpunit"
+    }
+}

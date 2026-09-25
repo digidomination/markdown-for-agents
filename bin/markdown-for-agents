@@ -1,0 +1,101 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/*
+ * Converts a page the way the middleware would, for a preview or an audit.
+ *
+ *   markdown-for-agents https://example.com/pricing
+ *   markdown-for-agents page.html --url=https://example.com/pricing
+ *
+ * Options: --main=SELECTOR (repeatable), --exclude=SELECTOR (repeatable),
+ * --images=alt|all|none, --no-frontmatter, --no-json-ld,
+ * --parser=auto|html5|libxml, --stats (sizes and token estimates on stderr).
+ */
+
+use Digidomination\MarkdownForAgents\PageConverter;
+use Digidomination\MarkdownForAgents\Tokens;
+
+foreach ([__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $autoload) {
+    if (is_file($autoload)) {
+        require $autoload;
+        break;
+    }
+}
+if (!class_exists(PageConverter::class)) {
+    // No Composer: the package has no dependencies, so its own sources are enough.
+    spl_autoload_register(static function (string $class): void {
+        $prefix = 'Digidomination\\MarkdownForAgents\\';
+        if (str_starts_with($class, $prefix)) {
+            require __DIR__ . '/../src/' . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
+        }
+    });
+}
+
+$source = null;
+$options = ['main' => [], 'exclude' => []];
+$url = null;
+$stats = false;
+foreach (array_slice($argv, 1) as $arg) {
+    if (preg_match('/^--(main|exclude)=(.+)$/', $arg, $m)) {
+        $options[$m[1]][] = $m[2];
+    } elseif (preg_match('/^--(images|parser)=(.+)$/', $arg, $m)) {
+        $options[$m[1]] = $m[2];
+    } elseif (preg_match('/^--url=(.+)$/', $arg, $m)) {
+        $url = $m[1];
+    } elseif ($arg === '--no-frontmatter') {
+        $options['frontmatter'] = false;
+    } elseif ($arg === '--no-json-ld') {
+        $options['json_ld'] = false;
+    } elseif ($arg === '--stats') {
+        $stats = true;
+    } elseif ($arg === '-h' || $arg === '--help') {
+        fwrite(STDOUT, "usage: markdown-for-agents <url|file> [--url=PAGE_URL] [--main=SEL] [--exclude=SEL] [--images=alt|all|none] [--no-frontmatter] [--no-json-ld] [--parser=auto|html5|libxml] [--stats]\n");
+        exit(0);
+    } elseif ($source === null) {
+        $source = $arg;
+    } else {
+        fwrite(STDERR, "Unexpected argument: $arg\n");
+        exit(2);
+    }
+}
+if ($source === null) {
+    fwrite(STDERR, "usage: markdown-for-agents <url|file> [options], see --help\n");
+    exit(2);
+}
+if ($options['main'] === []) {
+    unset($options['main']);
+}
+
+if (preg_match('#^https?://#i', $source)) {
+    $context = stream_context_create(['http' => [
+        'header' => "Accept: text/html\r\nUser-Agent: markdown-for-agents (+https://github.com/digidomination/markdown-for-agents)\r\n",
+        'timeout' => 30,
+    ]]);
+    $html = @file_get_contents($source, false, $context);
+    $url ??= $source;
+} else {
+    $html = @file_get_contents($source);
+    $url ??= 'https://example.com/';
+}
+if (!is_string($html) || $html === '') {
+    fwrite(STDERR, "Could not read $source\n");
+    exit(1);
+}
+
+$markdown = (new PageConverter($options))->convert($html, $url)['markdown'];
+fwrite(STDOUT, $markdown);
+
+if ($stats) {
+    $htmlTokens = Tokens::estimate($html);
+    $mdTokens = Tokens::estimate($markdown);
+    fwrite(STDERR, sprintf(
+        "html %s bytes, ~%s tokens -> markdown %s bytes, ~%s tokens (%d%% fewer)\n",
+        number_format(strlen($html)),
+        number_format($htmlTokens),
+        number_format(strlen($markdown)),
+        number_format($mdTokens),
+        $htmlTokens > 0 ? (int) round(100 - 100 * $mdTokens / $htmlTokens) : 0,
+    ));
+}
