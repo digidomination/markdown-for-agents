@@ -31,6 +31,16 @@ final class HtmlToMarkdown
         'section', 'summary', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'ul',
     ];
 
+    /**
+     * Containers whose children are running text: adjacent elements inside
+     * them join as written (<b>Pre</b><i>fix</i>).
+     */
+    private const PROSE_PARENTS = [
+        'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'strong', 'b', 'em', 'i', 'u', 's', 'del', 'ins',
+        'code', 'kbd', 'samp', 'q', 'mark', 'small', 'sup', 'sub', 'label', 'button', 'abbr', 'cite',
+        'dfn', 'time', 'figcaption', 'summary', 'caption', 'dt',
+    ];
+
     /** Elements whose content is never walked. */
     private const SKIP_TAGS = [
         'script', 'style', 'noscript', 'template', 'svg', 'math', 'canvas', 'object', 'embed', 'video',
@@ -89,9 +99,11 @@ final class HtmlToMarkdown
     {
         $out = [];
         $inline = '';
+        $previous = null;
         foreach ($nodes as $node) {
             if ($node->nodeType === XML_TEXT_NODE || $node->nodeType === XML_CDATA_SECTION_NODE) {
                 $inline .= $this->text($node->textContent);
+                $previous = null;
                 continue;
             }
             if ($node->nodeType !== XML_ELEMENT_NODE || self::skipped($node)) {
@@ -99,13 +111,15 @@ final class HtmlToMarkdown
             }
             if ($this->isBlock($node)) {
                 $this->flush($inline, $out);
+                $previous = null;
                 foreach ($this->block($node) as $block) {
                     if (trim($block) !== '') {
                         $out[] = $block;
                     }
                 }
             } else {
-                $inline .= $this->inline($node);
+                $inline .= ($previous !== null && self::chipBoundary($previous, $node) ? ' · ' : '') . $this->inline($node);
+                $previous = $node;
             }
         }
         $this->flush($inline, $out);
@@ -474,13 +488,19 @@ final class HtmlToMarkdown
     private function inlineChildren(object $el): string
     {
         $out = '';
+        $previous = null;
         foreach ($el->childNodes as $child) {
             if ($child->nodeType === XML_TEXT_NODE || $child->nodeType === XML_CDATA_SECTION_NODE) {
                 $out .= $this->text($child->textContent);
+                $previous = null;
             } elseif ($child->nodeType === XML_ELEMENT_NODE && !self::skipped($child)) {
-                $out .= $this->isBlock($child)
-                    ? ' ' . str_replace("\n", ' ', self::joinBlocks($this->block($child))) . ' '
-                    : $this->inline($child);
+                if ($this->isBlock($child)) {
+                    $out .= ' ' . str_replace("\n", ' ', self::joinBlocks($this->block($child))) . ' ';
+                    $previous = null;
+                } else {
+                    $out .= ($previous !== null && self::chipBoundary($previous, $child) ? ' · ' : '') . $this->inline($child);
+                    $previous = $child;
+                }
             }
         }
 
@@ -724,6 +744,35 @@ final class HtmlToMarkdown
         return (string) $el->getAttribute($name);
     }
 
+
+    /**
+     * Two inline siblings with nothing between them that would run into one
+     * word: tag chips (<span>Preise</span><span>Tipps</span>) that CSS sets
+     * apart with a gap. Only in containers that hold elements and no text of
+     * their own, and only for pieces of two characters or more, so running
+     * text and letter-by-letter animated headings stay as written.
+     */
+    private static function chipBoundary(object $left, object $right): bool
+    {
+        $parent = $right->parentNode;
+        if ($parent === null || in_array($parent->localName, self::PROSE_PARENTS, true)) {
+            return false;
+        }
+        $a = (string) $left->textContent;
+        $b = (string) $right->textContent;
+        if (mb_strlen(trim($a)) < 2 || mb_strlen(trim($b)) < 2
+            || !preg_match('/[\p{L}\p{N}]$/u', $a) || !preg_match('/^[\p{L}\p{N}]/u', $b)) {
+            return false;
+        }
+        foreach ($parent->childNodes as $child) {
+            if (($child->nodeType === XML_TEXT_NODE || $child->nodeType === XML_CDATA_SECTION_NODE)
+                && trim($child->textContent) !== '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     /** Content that is never walked; a labelled role="img" still speaks through its label. */
     private static function skipped(object $el): bool

@@ -196,4 +196,26 @@ final class HtmlToMarkdownTest extends ParserCase
         // Ā ends in byte 0x80: a byte-wise trim around the line-break placeholder would eat it.
         self::assertSame('**Übersetzung** 🇩🇪 – Ā ✓ **Ā**', self::md($parser, '<p><strong>Übersetzung</strong> 🇩🇪 – Ā ✓ <b>Ā</b></p>'));
     }
+
+    #[DataProvider('parsers')]
+    public function testChipsWithoutWhitespaceStaySeparate(string $parser): void
+    {
+        self::assertSame(
+            "Gruppen-Fotoshooting · Team-Fotos · Preise\n\n[Impressum](https://example.com/impressum) · [Datenschutz](https://example.com/datenschutz)",
+            self::md($parser, '<div class="tags"><span>Gruppen-Fotoshooting</span><span>Team-Fotos</span><span>Preise</span></div>'
+                . '<div><a href="/impressum">Impressum</a><a href="/datenschutz">Datenschutz</a></div>'),
+        );
+    }
+
+    #[DataProvider('parsers')]
+    public function testRunningTextStaysAsWritten(string $parser): void
+    {
+        // Formatting inside a word, a price and its unit, and a heading animated letter by letter.
+        self::assertSame(
+            "**Pre***fix* word\n\n29 €/Monat\n\n# Hello",
+            self::md($parser, '<p><b>Pre</b><i>fix</i> word</p><div><span>29 €</span><span>/Monat</span></div>'
+                . '<h1><span>H</span><span>e</span><span>l</span><span>l</span><span>o</span></h1>'),
+        );
+    }
+
 }
