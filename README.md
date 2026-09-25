@@ -6,7 +6,7 @@ A self-hosted take on Cloudflare's [Markdown for Agents](https://developers.clou
 
 ## Why
 
-Agents read the web in tokens, and most of a web page is markup. Across 208 pages of three production sites we run, the HTML came to about 7.06 million tokens and the Markdown to about 0.65 million: **91% fewer**. Our own services page goes from about 19,800 tokens to about 3,100.
+Agents read the web in tokens, and most of a web page is markup. Across 208 pages of the production sites we run, the HTML came to about 7.06 million tokens and the Markdown to about 0.65 million: **91% fewer**. Our own services page goes from about 19,800 tokens to about 3,100.
 
 An agent that wants Markdown can say so in its `Accept` header. For tools that can't set headers, the [llms.txt](https://llmstxt.org/) convention adds `.md` URLs. This package answers both.
 
