@@ -118,6 +118,25 @@ final class PageConverterTest extends ParserCase
         self::assertSame("[X](https://example.com/a/x)\n", $result['markdown']);
     }
 
+    public function testAddressOrderFollowsTheCountry(): void
+    {
+        $address = static fn (array $postal): string => PageConverter::organization([
+            ['@type' => 'Organization', 'name' => 'X', 'address' => ['@type' => 'PostalAddress'] + $postal],
+        ])['address'];
+
+        self::assertSame('523 Jackson Street, Unit #210, Saint Paul, Minnesota 55101, US', $address([
+            'streetAddress' => '523 Jackson Street, Unit #210', 'postalCode' => '55101',
+            'addressLocality' => 'Saint Paul', 'addressRegion' => 'Minnesota', 'addressCountry' => 'US',
+        ]));
+        self::assertSame('10 Downing Street, London, SW1A 2AA, United Kingdom', $address([
+            'streetAddress' => '10 Downing Street', 'postalCode' => 'SW1A 2AA', 'addressLocality' => 'London',
+            'addressCountry' => ['@type' => 'Country', 'name' => 'United Kingdom'],
+        ]));
+        self::assertSame('Weg 1, 10115 Berlin, DE', $address([
+            'streetAddress' => 'Weg 1', 'postalCode' => '10115', 'addressLocality' => 'Berlin', 'addressCountry' => 'DE',
+        ]));
+    }
+
     public function testOrganizationFromPlainJsonLd(): void
     {
         self::assertSame(

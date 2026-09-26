@@ -216,12 +216,18 @@ final class PageConverter
 
         $address = $best['address'] ?? null;
         if (is_array($address) && !array_is_list($address)) {
-            $line = trim(implode(', ', array_filter([
-                trim((string) ($address['streetAddress'] ?? '')),
-                trim(((string) ($address['postalCode'] ?? '')) . ' ' . ((string) ($address['addressLocality'] ?? ''))),
-                trim((string) ($address['addressRegion'] ?? '')),
-                is_array($address['addressCountry'] ?? null) ? (string) ($address['addressCountry']['name'] ?? '') : (string) ($address['addressCountry'] ?? ''),
-            ], static fn (string $p): bool => $p !== '')));
+            $field = static fn (string $key): string => trim((string) ($address[$key] ?? ''));
+            $country = trim(is_array($address['addressCountry'] ?? null) ? (string) ($address['addressCountry']['name'] ?? '') : $field('addressCountry'));
+            // Most of Europe writes "10115 Berlin". The US, Canada and Australia write
+            // "Saint Paul, Minnesota 55101"; the UK and Ireland put the postcode after the town.
+            $parts = match (strtoupper($country)) {
+                'US', 'USA', 'UNITED STATES', 'UNITED STATES OF AMERICA', 'CA', 'CANADA', 'AU', 'AUSTRALIA'
+                    => [$field('streetAddress'), $field('addressLocality'), trim($field('addressRegion') . ' ' . $field('postalCode')), $country],
+                'GB', 'UK', 'UNITED KINGDOM', 'IE', 'IRELAND'
+                    => [$field('streetAddress'), $field('addressLocality'), $field('addressRegion'), $field('postalCode'), $country],
+                default => [$field('streetAddress'), trim($field('postalCode') . ' ' . $field('addressLocality')), $field('addressRegion'), $country],
+            };
+            $line = implode(', ', array_filter($parts, static fn (string $p): bool => $p !== ''));
         } else {
             $line = is_string($address) ? trim($address) : '';
         }
